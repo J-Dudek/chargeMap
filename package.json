@@ -1,0 +1,22 @@
+{
+  "name": "recharge-map",
+  "version": "1.0.0",
+  "description": "Carte des bornes de recharge par type de prise, avec tarifs et disponibilité : agrège Open Charge Map, OpenStreetMap et la base IRVE",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/*.test.js",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0"
+  }
+}

@@ -1,0 +1,40 @@
+services:
+  recharge-map:
+    build: .
+    container_name: recharge-map
+    restart: unless-stopped
+    # Le port n'écoute que sur le NAS : c'est le reverse proxy HTTPS qui publie le site.
+    # Surtout pas "8080:8080" : le site serait ouvert à tout le réseau sans HTTPS, et la limite
+    # de débit deviendrait contournable (n'importe qui pourrait inventer un X-Forwarded-For).
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Les secrets viennent du fichier .env (voir .env.example)
+    environment:
+      # Clé gratuite : https://openchargemap.org/site/develop/api (sans elle, pas de données Open Charge Map)
+      OCM_API_KEY: ${OCM_API_KEY:-}
+      # true : un reverse proxy HTTPS est devant, la limite de débit s'applique par visiteur
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      # Adresse publique du site, en https (URL canonique, sitemap, partage, HSTS)
+      SITE_URL: ${SITE_URL:-}
+      # Fond de carte, facultatif (vide = OpenFreeMap)
+      MAP_STYLE_URL: ${MAP_STYLE_URL:-}
+      TILE_URL: ${TILE_URL:-}
+      TILE_ATTRIBUTION: ${TILE_ATTRIBUTION:-}
+    volumes:
+      - recharge-data:/data
+    # --- Cloisonnement : l'app n'a besoin que d'écrire son cache dans /data et d'appeler des API en HTTPS ---
+    read_only: true            # système de fichiers du conteneur en lecture seule
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL                    # aucun privilège noyau
+    # Protection en plus, à essayer : sur certains noyaux, le conteneur ne démarre plus avec
+    # (« operation not permitted »). Le gain est faible ici : pas de root, aucun privilège, aucun binaire setuid.
+    # security_opt:
+    #   - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 768m
+    cpus: 1.0
+
+volumes:
+  recharge-data:

@@ -1,0 +1,9 @@
+.git
+.idea
+.env
+data
+node_modules
+test
+README.md
+docker-compose.yml
+tools

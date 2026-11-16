@@ -1,0 +1,11 @@
+node_modules/
+# cache IRVE (~35 Mo, régénéré au démarrage)
+data/
+# secrets
+.env
+# IDE / système
+.idea/
+.vscode/
+.DS_Store
+*.log
+tools/out/
