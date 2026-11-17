@@ -268,18 +268,25 @@ a { color: var(--accent-ink); }
 @media (max-width: 800px) {
   .brand span { display: none; }
   .layout { flex-direction: column-reverse; }
+  /* Le panneau garde toujours sa hauteur étendue : on le fait glisser avec transform (animé par le GPU,
+     sans recalcul de la mise en page). La partie visible dépend de l'état ; le JS suit le doigt en direct. */
   .panel {
-    position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 42%;
+    position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 82%;
     border-right: 0; border-radius: 18px 18px 0 0; box-shadow: 0 -6px 24px rgba(15,27,45,.18);
-    transition: height .25s ease;
+    transform: translateY(48.78%); /* normal : 42 % de la zone visible (40 / 82) */
+    transition: transform .32s cubic-bezier(.2, .8, .2, 1);
+    will-change: transform;
+    touch-action: pan-y;
   }
-  .panel.collapsed { height: calc(100px + env(safe-area-inset-bottom)); }
-  .panel.expanded { height: 82%; }
-  .panel-handle { display: block; flex: none; width: 100%; height: 28px; border: 0; background: none; cursor: pointer; position: relative; }
-  .panel-handle::after { content: ''; position: absolute; top: 10px; left: 50%; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--handle); }
-  .panel-head { padding-top: 0; }
-  .panel-head { touch-action: none; } /* glisser l'en-tête change la hauteur du panneau */
-  .panel.collapsed .panel-scroll, .panel.collapsed .sort { display: none; }
+  .panel.collapsed { transform: translateY(calc(100% - 100px - env(safe-area-inset-bottom))); }
+  .panel.expanded { transform: translateY(0); }
+  .panel.dragging { transition: none; }
+  /* la liste ne doit pas finir sous le bord de l'écran : --hidden = partie du panneau hors écran (posée par le JS) */
+  .panel-scroll { padding-bottom: var(--hidden, 0px); }
+  .panel-handle { display: block; flex: none; width: 100%; height: 32px; border: 0; background: none; cursor: grab; position: relative; touch-action: none; }
+  .panel-handle::after { content: ''; position: absolute; top: 12px; left: 50%; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--handle); }
+  .panel-head { padding-top: 0; touch-action: none; } /* glisser l'en-tête déplace le panneau */
+  .panel.collapsed .panel-scroll, .panel.collapsed .sort { visibility: hidden; transition: visibility 0s .32s; }
   .leaflet-control-zoom { display: none; } /* pincer pour zoomer */
   /* le bas de la carte est sous le panneau : l'attribution passe en haut */
   .leaflet-bottom.leaflet-right { bottom: auto; top: 0; }

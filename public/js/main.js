@@ -565,39 +565,93 @@ async function init() {
     );
   });
 
-  /* ---------------- panneau mobile (3 hauteurs : réduit, normal, étendu) ---------------- */
+  /* ---------------- panneau mobile (3 positions : réduit, normal, étendu) ----------------
+     Le panneau suit le doigt en direct (pointer events + transform), puis s'aimante sur la position
+     la plus proche en tenant compte de la vitesse du geste. Un simple toucher sur la poignée change de cran. */
   const PANEL_MODES = ['collapsed', null, 'expanded'];
   const panel = $('#panel');
   const handle = $('#panelHandle');
   const panelMode = () => PANEL_MODES.find((m) => m && panel.classList.contains(m)) ?? null;
 
+  /** Décalage vertical (px) de chaque position par rapport au panneau étendu. */
+  function panelSnaps() {
+    const full = panel.offsetHeight;
+    const probe = Object.assign(document.createElement('div'), { style: 'position:absolute;visibility:hidden;height:calc(100px + env(safe-area-inset-bottom))' });
+    document.body.append(probe);
+    const peek = probe.offsetHeight;
+    probe.remove();
+    const area = panel.offsetParent.clientHeight;
+    return { collapsed: Math.max(0, full - peek), normal: Math.max(0, full - area * 0.42), expanded: 0 };
+  }
+  const modeKey = (mode) => mode ?? 'normal';
+
   function setPanel(mode) {
     panel.classList.remove('collapsed', 'expanded');
     if (mode) panel.classList.add(mode);
     handle.setAttribute('aria-expanded', mode !== 'collapsed');
+    syncHidden();
   }
-  /** +1 agrandit d'un cran, -1 réduit d'un cran. */
-  function stepPanel(delta) {
-    const i = PANEL_MODES.indexOf(panelMode()) + delta;
-    setPanel(PANEL_MODES[Math.max(0, Math.min(PANEL_MODES.length - 1, i))]);
+  /** Garde la fin de la liste atteignable : on réserve en bas la partie du panneau hors écran. */
+  function syncHidden() {
+    if (!isMobile()) return panel.style.removeProperty('--hidden');
+    panel.style.setProperty('--hidden', `${Math.round(panelSnaps()[modeKey(panelMode())])}px`);
+  }
+  const cyclePanel = () => setPanel(panelMode() === 'expanded' ? 'collapsed' : panelMode() === 'collapsed' ? null : 'expanded');
+
+  // clavier : Entrée / Espace sur la poignée (detail === 0). Le toucher est géré par le glisser ci-dessous.
+  handle.addEventListener('click', (e) => e.detail === 0 && cyclePanel());
+
+  let drag = null;
+  const dragZones = [handle, $('#panelDrag')];
+  for (const zone of dragZones) {
+    zone.addEventListener('pointerdown', (e) => {
+      if (!isMobile() || drag || (e.button ?? 0) !== 0 || (e.target.closest('button, select, a') && e.target !== handle)) return;
+      const snaps = panelSnaps();
+      drag = {
+        id: e.pointerId, zone, snaps, startY: e.clientY, startTy: snaps[modeKey(panelMode())],
+        ty: snaps[modeKey(panelMode())], moved: false, samples: [{ y: e.clientY, t: e.timeStamp }],
+      };
+      zone.setPointerCapture(e.pointerId);
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const dy = e.clientY - drag.startY;
+      if (!drag.moved && Math.abs(dy) < 6) return; // sous le seuil : c'est un toucher
+      if (!drag.moved) {
+        drag.moved = true;
+        panel.classList.add('dragging');
+      }
+      // limites avec un peu de résistance au-delà des positions extrêmes
+      const lo = 0, hi = drag.snaps.collapsed;
+      let ty = drag.startTy + dy;
+      if (ty < lo) ty = lo + (ty - lo) * 0.25;
+      if (ty > hi) ty = hi + (ty - hi) * 0.25;
+      drag.ty = ty;
+      panel.style.transform = `translateY(${ty}px)`;
+      drag.samples.push({ y: e.clientY, t: e.timeStamp });
+      if (drag.samples.length > 6) drag.samples.shift();
+    });
+    const end = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      const d = drag;
+      drag = null;
+      if (zone.hasPointerCapture(e.pointerId)) zone.releasePointerCapture(e.pointerId);
+      if (!d.moved) return e.type === 'pointerup' && zone === handle ? cyclePanel() : undefined;
+      // vitesse (px/ms) sur les derniers mouvements, projetée 150 ms plus loin
+      const first = d.samples[0], last = d.samples[d.samples.length - 1];
+      const v = last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0;
+      const target = e.type === 'pointercancel' ? d.ty : d.ty + v * 150;
+      const [mode] = Object.entries(d.snaps).reduce((best, cur) => (Math.abs(cur[1] - target) < Math.abs(best[1] - target) ? cur : best));
+      panel.classList.remove('dragging');
+      panel.style.removeProperty('transform'); // la classe d'état reprend la main et anime jusqu'à la position finale
+      setPanel(mode === 'normal' ? null : mode);
+    };
+    zone.addEventListener('pointerup', end);
+    zone.addEventListener('pointercancel', end);
   }
 
-  handle.addEventListener('click', () => setPanel(panelMode() === 'expanded' ? 'collapsed' : panelMode() === 'collapsed' ? null : 'expanded'));
-
-  // glisser l'en-tête du panneau vers le haut ou le bas
-  let touchStartY = null;
-  const head = $('#panelDrag');
-  head.addEventListener('touchstart', (e) => (touchStartY = e.touches[0].clientY), { passive: true });
-  head.addEventListener(
-    'touchend',
-    (e) => {
-      if (touchStartY === null) return;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      touchStartY = null;
-      if (Math.abs(dy) > 30) stepPanel(dy < 0 ? 1 : -1);
-    },
-    { passive: true },
-  );
+  window.addEventListener('resize', syncHidden);
+  syncHidden();
 
   // l'adresse a changé (saisie à la main, lien vers une autre vue) : on y va
   window.addEventListener('hashchange', () => location.reload());

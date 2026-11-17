@@ -3,7 +3,7 @@
  * Réseau d'abord : en ligne on sert toujours la dernière version, le cache n'est qu'un secours.
  * Les bornes, les recherches et le fond de carte ne sont jamais mis en cache.
  */
-const CACHE = 'recharge-map-v1';
+const CACHE = 'recharge-map-v2';
 
 // L'essentiel de l'interface, mis en cache dès l'installation
 const SHELL = [
