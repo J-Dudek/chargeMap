@@ -4,7 +4,9 @@ ENV NODE_ENV=production PORT=8080 DATA_DIR=/data
 COPY package.json ./
 COPY server ./server
 COPY public ./public
-RUN mkdir -p /data && chown node:node /data
+# Les sources gardent les droits du dossier copié : sur le NAS ils peuvent être trop restrictifs
+# pour l'utilisateur node (EACCES). On force la lecture pour tous.
+RUN chmod -R a+rX /app && mkdir -p /data && chown node:node /data
 VOLUME ["/data"]
 EXPOSE 8080
 USER node

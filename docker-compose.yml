@@ -32,9 +32,11 @@ services:
     # (« operation not permitted »). Le gain est faible ici : pas de root, aucun privilège, aucun binaire setuid.
     # security_opt:
     #   - no-new-privileges:true
-    pids_limit: 100
+    # Commenté car non supporté par le noyau du NAS (pas de cgroup pids)
+    # pids_limit: 100
     mem_limit: 768m
-    cpus: 1.0
+    # Commenté car non supporté par Synology qui n'a pas le support CFS
+    # cpus: 1.0
 
 volumes:
   recharge-data:
