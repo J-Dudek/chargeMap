@@ -35,6 +35,7 @@
   --price-bg: #f1eaff; --price-ink: #5a2ea6;
   --ok: #0e7f3e;            /* repères : assez foncés pour que le chiffre reste lisible (contraste ≥ 4,5:1) */
   --busy: #e8a400;
+  --star: #a86f00;           /* étoile des favoris : assez foncée pour rester visible sur blanc */
   --down: #d92d20;
   --unknown: #4a6fa5;
   --radius: 14px;
@@ -69,6 +70,7 @@
   --down-bg: #46100c; --down-ink: #fca5a5;
   --free-bg: #12284a; --free-ink: #93c5fd;
   --price-bg: #2a1a4a; --price-ink: #c4b5fd;
+  --star: #fcd34d;
   --shadow: 0 6px 24px rgba(0, 0, 0, .45);
 }
 /* tuiles image (secours sans WebGL) : on les assombrit ; le fond vectoriel a déjà sa version sombre */
@@ -145,6 +147,11 @@ a { color: var(--accent-ink); }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 16px 8px; }
 .panel-head h1 { font-family: 'Space Grotesk', sans-serif; font-size: 20px; margin: 0; }
 .panel-head p { margin: 2px 0 0; font-size: 13px; }
+.head-actions { display: flex; gap: 6px; flex: none; }
+.ghost-btn.fav-toggle { width: auto; padding: 0 10px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.fav-toggle[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+.fav-btn { flex: none; border: 0; background: none; padding: 0 2px; margin: -4px -4px 0 0; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; }
+.fav-btn[aria-pressed="true"], .fav-btn:hover { color: var(--star); }
 .ghost-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; }
 .warnings { margin: 0 12px 12px; padding: 8px 12px; border-radius: 10px; background: var(--busy-bg); color: var(--busy-ink); font-size: 12.5px; }
 .warnings div + div { margin-top: 4px; }
@@ -157,7 +164,7 @@ a { color: var(--accent-ink); }
 /* partie qui défile : la liste, puis les avertissements sur les sources */
 .panel-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .list { list-style: none; margin: 0; padding: 0 12px 2px; }
-.panel[aria-busy="true"] .list { opacity: .6; }
+.panel[aria-busy="true"]:not(.favorites) .list { opacity: .6; }
 .credit { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 0; }
 .credit a { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); text-decoration: none; font-weight: 500; }
 .credit a:hover { color: var(--accent-ink); }
@@ -243,6 +250,8 @@ a { color: var(--accent-ink); }
   .chip { padding: 10px 16px; font-size: 14px; }
   .actions a { padding: 11px 16px; font-size: 14px; }
   .ghost-btn { width: 44px; height: 44px; }
+  .ghost-btn.fav-toggle { width: auto; padding: 0 12px; }
+  .fav-btn { padding: 4px 6px; margin: -8px -8px 0 0; }
   .install-btn { padding: 10px 14px; font-size: 13px; }
   .suggestions li { padding: 13px 12px; }
   .sort select { font-size: 16px; padding: 7px 8px; } /* 16px : pas de zoom iOS */

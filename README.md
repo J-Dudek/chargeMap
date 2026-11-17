@@ -1,7 +1,7 @@
 # Recharge Map
 
 Carte des bornes de recharge, filtrées sur **votre type de prise** (CHAdeMO, CCS Combo 2, Type 2, prise domestique E/F — sélection multiple, mémorisée), avec **tarifs** et **disponibilité temps réel** quand elle existe.
-Recherche par adresse (autocomplétion) ou par géolocalisation ; liste triée par distance, prix au kWh ou puissance ; filtres (≥ 50 kW, disponible, gratuit, tarif connu) ; liens de navigation (Google Maps, Waze, Plans sur iPhone, appli au choix sur Android). L'adresse de la page garde la vue et les prises choisies : elle se partage telle quelle. Mode clair ou sombre (interface et fond de carte) : celui de l'appareil à l'ouverture, puis au choix avec le bouton en haut à droite.
+Recherche par adresse (autocomplétion) ou par géolocalisation ; liste triée par distance, prix au kWh ou puissance ; filtres (≥ 50 kW, disponible, gratuit, tarif connu) ; liens de navigation (Google Maps, Waze, Plans sur iPhone, appli au choix sur Android). Bornes favorites (étoile ☆ sur chaque fiche, bouton ★ en haut de la liste) : enregistrées sur l'appareil, sans compte, avec leur disponibilité à jour d'un coup d'œil, où qu'on soit sur la carte. L'adresse de la page garde la vue et les prises choisies : elle se partage telle quelle. Mode clair ou sombre (interface et fond de carte) : celui de l'appareil à l'ouverture, puis au choix avec le bouton en haut à droite.
 
 La puissance, la disponibilité et le filtre « ≥ 50 kW » portent uniquement sur les prises sélectionnées.
 Quand une prise CHAdeMO partage un point de charge avec une prise CCS plus puissante, sa puissance est affichée « ≈ 50 kW » (estimation), sauf si une autre source donne la valeur réelle.
@@ -132,7 +132,8 @@ La clé d'un fond de carte est visible dans le navigateur : la restreindre à vo
 - `GET /api/stations?south=&west=&north=&east=&types=chademo,ccs` → `{ types, stations[], counts: {IRVE, OCM, OSM}, warnings[], pending[] }` (types : `chademo`, `ccs`, `type2`, `ef` ; défaut `chademo` ; `pending` : sources trop lentes cette fois, que le front redemande quelques secondes plus tard)
 - `GET /api/config` → ce dont le front a besoin au démarrage : `{ tiles, connectors: [{ id, label }], defaultTypes, maxSpan }`
 - `GET /api/connectors` → libellés des types gérés
-- `GET /api/geocode?q=` → `{ results: [{ label, lat, lon, country }] }`
+- `GET /api/favorites?types=…&id=irve:…&id=irve:…` → `{ types, stations[] }` : état à jour de bornes précises, où qu'elles soient (50 au plus). Seule la base IRVE donne une disponibilité en temps réel, les autres identifiants sont ignorés. `id` est répété car un identifiant IRVE peut contenir une virgule
+- `GET /api/geocode?q=&lat=&lon=` → `{ results: [{ label, lat, lon, country }] }` (lat / lon facultatifs : centre de la carte, pour départager les homonymes)
 - `GET /api/status` → état des sources (chargement IRVE, dernières erreurs)
 
 ## Structure
@@ -157,6 +158,7 @@ public/
   vendor/         Leaflet, Leaflet.markercluster, MapLibre GL (copies non modifiées)
   js/main.js      carte, chargement, liste, recherche, géolocalisation, panneau mobile
   js/theme.js     thème clair / sombre, appliqué avant le premier affichage
+  js/favorites.js bornes favorites, gardées sur l'appareil
   js/stations.js  règles d'affichage : puissance, disponibilité, filtres, tris
   js/templates.js HTML des fiches et des marqueurs
   js/util.js      fonctions pures (échappement, distances)

@@ -7,12 +7,14 @@ import { config } from './config.js';
 import { CONNECTORS, DEFAULT_TYPES, parseTypes } from './connectors.js';
 import { geocode } from './geocode.js';
 import { clientIp, rateKey, RateLimiter, SECURITY_HEADERS, sendBody, sendJson, siteUrl } from './http.js';
-import { irveStatus, startIrve } from './sources/irve.js';
+import { mergeStations } from './merge.js';
+import { irveStationsById, irveStatus, startIrve } from './sources/irve.js';
 import { homeLastModified, serveStatic } from './static.js';
 import { getStations, liveErrors } from './stations.js';
 import { TtlCache } from './util.js';
 
 const MAX_QUERY_LENGTH = 200;
+const MAX_FAVORITES = 50;
 const LON_SPAN_FACTOR = 1.6; // un écran est plus large que haut
 const geoCache = new TtlCache(24 * 3600 * 1000, 500);
 const limiter = new RateLimiter(config.rateLimitPerMinute);
@@ -32,6 +34,14 @@ const API = {
     const { bbox, error, tooLarge } = parseBbox(sp);
     if (error) return [400, { error, tooLarge: !!tooLarge }];
     return [200, await getStations(bbox, parseTypes(sp.get('types')))];
+  },
+
+  // État à jour des bornes favorites : ?id=…&id=… (un identifiant IRVE peut contenir une virgule).
+  // Seule la base IRVE donne une disponibilité en temps réel, les autres identifiants sont ignorés.
+  '/api/favorites': (sp) => {
+    const ids = [...new Set(sp.getAll('id'))].filter((id) => id.startsWith('irve:') && id.length <= MAX_QUERY_LENGTH).slice(0, MAX_FAVORITES);
+    const types = parseTypes(sp.get('types'));
+    return [200, { types, stations: mergeStations([irveStationsById(ids, types)], config.mergeDistanceMeters) }];
   },
 
   '/api/geocode': async (sp) => {

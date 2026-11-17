@@ -76,6 +76,14 @@ test('API de bout en bout', async (t) => {
   assert.equal(conf.sources.length, 3);
   assert.equal(conf.status.available, 1);
   assert.ok(conf.tariffs.some((x) => x.source === 'OCM' && x.text.includes('0,45')));
+
+  // Favoris : retrouvés par identifiant, où qu'ils soient, avec leur disponibilité ; le reste est ignoré
+  const favParams = new URLSearchParams({ types: 'chademo,ccs' });
+  for (const id of ['irve:FRION1', 'irve:45.00000,4.00000', 'ocm:1', 'irve:inconnu']) favParams.append('id', id);
+  const fav = await (await fetch(`${app}/api/favorites?${favParams}`)).json();
+  assert.deepEqual(fav.stations.map((s) => s.id), ['irve:FRION1']);
+  assert.equal(fav.stations[0].status.available, 1);
+  assert.deepEqual((await (await fetch(`${app}/api/favorites`)).json()).stations, []);
   // Overpass : le 1er serveur (502) est sauté, le 2e répond
   const downCalls = () => calls.filter((c) => c.startsWith('/overpass-down')).length;
   assert.equal(downCalls(), 1);

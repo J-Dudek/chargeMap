@@ -18,6 +18,7 @@ const CHADEMO_SHARED_CAP_KW = 50;
 
 const state = {
   stations: [],
+  byId: new Map(), // pour retrouver vite les bornes favorites
   pdcIds: new Set(),
   dynamic: new Map(), // par id_pdc_itinerance : { etat, occupation, prises, at }
   tariffs: new Map(), // par tarif_id (schéma v3)
@@ -187,6 +188,7 @@ async function* rowsFromUrl(url) {
 function setStations(stations, loadedAt) {
   state.stations = stations;
   state.loadedAt = loadedAt;
+  state.byId = new Map(stations.map((s) => [s.id, s]));
   state.pdcIds = new Set(stations.flatMap((s) => s.pdcs.map((p) => p.id).filter(Boolean)));
 }
 
@@ -293,15 +295,20 @@ export function withTariff(tariff, ids, tariffs, now) {
   return { ...tariff, text: text || tariff.text, kwh: kwh.min === null ? null : kwh };
 }
 
+/** Ce qu'on renvoie au front : la station, son tarif en vigueur et sa disponibilité pour les prises choisies. */
+function forClient({ pdcs, tariffIds, ...s }, types, now) {
+  return { ...s, tariff: withTariff(s.tariff, tariffIds, state.tariffs, now), status: stationStatus({ pdcs }, state.dynamic, types) };
+}
+
 export function queryIrve(bbox, types) {
   const now = new Date().toISOString();
-  return state.stations
-    .filter((s) => inBbox(s.lat, s.lon, bbox) && hasAnyType(s, types))
-    .map(({ pdcs, tariffIds, ...s }) => ({
-      ...s,
-      tariff: withTariff(s.tariff, tariffIds, state.tariffs, now),
-      status: stationStatus({ pdcs }, state.dynamic, types),
-    }));
+  return state.stations.filter((s) => inBbox(s.lat, s.lon, bbox) && hasAnyType(s, types)).map((s) => forClient(s, types, now));
+}
+
+/** Bornes précises, où qu'elles soient : sert à rafraîchir les favoris. Les identifiants inconnus sont ignorés. */
+export function irveStationsById(ids, types) {
+  const now = new Date().toISOString();
+  return ids.map((id) => state.byId.get(id)).filter(Boolean).map((s) => forClient(s, types, now));
 }
 
 export function irveStatus() {

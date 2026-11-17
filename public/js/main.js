@@ -3,8 +3,9 @@
  * Les règles d'affichage sont dans stations.js, le HTML dans templates.js.
  */
 import { $, detectPlatform, getJson, loadScript, loadStylesheet, store, toast } from './dom.js';
+import { favoriteCount, favorites, isFavorite, liveIds, toggleFavorite, updateFavorites } from './favorites.js';
 import { FILTERS, passFilters, SORTS } from './stations.js';
-import { cardHtml, pinHtml, pinTitle } from './templates.js';
+import { cardHtml, favButton, pinHtml, pinTitle } from './templates.js';
 import { distanceKm, esc, formatViewHash, parseViewHash } from './util.js';
 
 const L = window.L; // Leaflet, chargé par index.html
@@ -21,6 +22,8 @@ const PAD_RATIO = 0.25;
 const RETRY_DELAY_MS = 5000;
 const MAX_RETRIES = 2;
 const SEARCH_DEBOUNCE_MS = 280;
+// Liste des favoris ouverte : disponibilité redemandée à ce rythme
+const FAVORITES_REFRESH_MS = 60 * 1000;
 // Fond vectoriel pas prêt dans ce délai : on passe aux tuiles image
 const VECTOR_TIMEOUT_MS = 8000;
 const isMobile = () => window.matchMedia('(max-width: 800px)').matches;
@@ -135,6 +138,8 @@ async function init() {
     markers: new Map(),
     abort: null,
     flying: false, // la carte se déplace d'elle-même vers une borne : pas de rechargement
+    showFavorites: false, // le panneau montre les favoris au lieu des bornes de la zone
+    favoritesAt: null, // heure de la dernière disponibilité reçue pour les favoris
   };
   if (!state.types.length) state.types = [...cfg.defaultTypes];
   const typesLabel = () => state.types.map((t) => labels[t]).join(' + ');
@@ -190,7 +195,7 @@ async function init() {
     const typesKey = state.types.join(',');
     const params = new URLSearchParams({ types: typesKey, south: b.getSouth().toFixed(5), west: b.getWest().toFixed(5), north: b.getNorth().toFixed(5), east: b.getEast().toFixed(5) });
     state.abort = new AbortController();
-    $('#subtitle').textContent = 'Chargement…';
+    if (!state.showFavorites) $('#subtitle').textContent = 'Chargement…';
     $('#panel').setAttribute('aria-busy', 'true');
     try {
       const data = await getJson(`/api/stations?${params}`, { signal: state.abort.signal });
@@ -202,7 +207,7 @@ async function init() {
       scheduleRetry(data.pending);
     } catch (e) {
       if (e.name === 'AbortError') return; // une requête plus récente a pris le relais
-      $('#subtitle').textContent = navigator.onLine ? e.message : 'Hors connexion';
+      if (!state.showFavorites) $('#subtitle').textContent = navigator.onLine ? e.message : 'Hors connexion';
     }
     $('#panel').removeAttribute('aria-busy');
   }
@@ -218,9 +223,12 @@ async function init() {
     retryTimer = setTimeout(() => loadStations({ force: true }), RETRY_DELAY_MS);
   }
 
-  function showWarnings(list = []) {
+  // les avertissements concernent la zone chargée : masqués pendant qu'on regarde les favoris
+  let warnings = [];
+  function showWarnings(list = warnings) {
+    warnings = list;
     const w = $('#warnings');
-    w.hidden = !list.length;
+    w.hidden = !list.length || state.showFavorites;
     w.innerHTML = list.map((x) => `<div>⚠ ${esc(x)}</div>`).join('');
   }
 
@@ -242,6 +250,7 @@ async function init() {
 
   /** Met à jour la liste et le titre pour les bornes visibles, sans toucher aux repères. */
   function renderList() {
+    if (state.showFavorites) return renderFavorites();
     const ref = refPoint();
     const view = map.getBounds();
     const inView = (s) => view.contains([s.lat, s.lon]);
@@ -266,11 +275,92 @@ async function init() {
       $('#subtitle').textContent = parts.join(' · ');
     }
 
-    const cardView = { types: state.types, labels, ref, selectedId: state.selectedId, platform };
+    const cardView = { types: state.types, labels, ref, selectedId: state.selectedId, platform, isFavorite };
     let html = visible.slice(0, MAX_CARDS).map((s) => cardHtml(s, cardView)).join('');
     if (visible.length > MAX_CARDS) html += `<li class="empty">… et ${visible.length - MAX_CARDS} autres : zoomez pour affiner.</li>`;
     if (!visible.length) html = `<li class="empty">${zoomedOut ? 'Cherchez une adresse ou zoomez sur la carte.' : `Aucune borne ${esc(typesLabel())} dans cette zone avec ces filtres.`}</li>`;
     $('#list').innerHTML = html;
+  }
+
+  /* ---------------- favoris ---------------- */
+  /** La liste des favoris, du plus proche au plus loin. */
+  function renderFavorites() {
+    const ref = refPoint();
+    const list = favorites().sort((a, b) => distanceKm(ref, a) - distanceKm(ref, b));
+    $('#sortBox').hidden = true;
+    $('#countTitle').textContent = `Mes favoris${list.length ? ` (${list.length})` : ''}`;
+    const at = state.favoritesAt ? `Disponibilité à ${new Date(state.favoritesAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : '';
+    $('#subtitle').textContent = list.length ? [at, 'enregistrés sur cet appareil'].filter(Boolean).join(' · ') : 'Enregistrés sur cet appareil';
+    const cardView = { types: state.types, labels, ref, selectedId: state.selectedId, platform, isFavorite };
+    $('#list').innerHTML = list.length
+      ? list.map((s) => cardHtml(s, cardView)).join('')
+      : '<li class="empty">Aucun favori pour l\'instant. Touchez l\'étoile ☆ d\'une borne pour la retrouver ici et suivre sa disponibilité.</li>';
+  }
+
+  /** Redemande la disponibilité des favoris (seules les bornes IRVE en ont une en temps réel). */
+  let favoritesTimer;
+  async function refreshFavorites() {
+    clearTimeout(favoritesTimer);
+    if (!state.showFavorites) return;
+    const ids = liveIds();
+    if (ids.length) {
+      const params = new URLSearchParams({ types: state.types.join(',') });
+      for (const id of ids) params.append('id', id);
+      try {
+        updateFavorites((await getJson(`/api/favorites?${params}`)).stations);
+        state.favoritesAt = Date.now();
+      } catch {
+        toast(navigator.onLine ? 'Disponibilité des favoris indisponible pour le moment' : 'Hors connexion');
+      }
+    }
+    if (state.showFavorites) renderFavorites();
+    favoritesTimer = setTimeout(refreshFavorites, FAVORITES_REFRESH_MS);
+  }
+
+  function showFavorites(on) {
+    state.showFavorites = on;
+    state.selectedId = null;
+    $('#panel').classList.toggle('favorites', on);
+    showWarnings();
+    $('#favBtn').setAttribute('aria-pressed', on);
+    $('#refreshBtn').title = on ? 'Mettre à jour la disponibilité' : 'Recharger la zone';
+    $('#refreshBtn').setAttribute('aria-label', $('#refreshBtn').title);
+    $('.panel-scroll').scrollTop = 0;
+    if (on) {
+      renderFavorites();
+      refreshFavorites();
+      if (isMobile()) setPanel('expanded');
+    } else {
+      clearTimeout(favoritesTimer);
+      render();
+    }
+  }
+
+  const updateFavCount = () => {
+    const n = favoriteCount();
+    $('#favCount').textContent = n;
+    $('#favBtn').setAttribute('aria-label', `Mes bornes favorites (${n})`);
+  };
+  updateFavCount();
+  $('#favBtn').addEventListener('click', () => showFavorites(!state.showFavorites));
+  // l'onglet revient au premier plan : la disponibilité a pu changer
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.showFavorites) refreshFavorites();
+  });
+
+  function onStar(btn, id) {
+    const station = state.stations.find((s) => s.id === id) ?? favorites().find((s) => s.id === id);
+    if (!station) return;
+    let fav;
+    try {
+      fav = toggleFavorite(station);
+    } catch (e) {
+      return toast(e.message);
+    }
+    updateFavCount();
+    toast(fav ? 'Ajoutée aux favoris' : 'Retirée des favoris');
+    if (state.showFavorites) return renderFavorites();
+    btn.outerHTML = favButton(fav);
   }
 
   /** Sélectionne une borne, ou la désélectionne si elle l'était déjà. fly centre la carte dessus. */
@@ -289,7 +379,16 @@ async function init() {
     if (!state.selectedId) return;
     document.querySelector(`.card[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     const marker = state.markers.get(id);
-    if (fly && marker) {
+    // favori hors de la zone chargée : on emmène la carte jusqu'à lui
+    const far = state.showFavorites && !marker && favorites().find((s) => s.id === id);
+    if (fly && far) {
+      state.flying = true;
+      map.once('moveend', () => {
+        state.flying = false;
+        loadStations();
+      });
+      map.setView([far.lat, far.lon], Math.max(map.getZoom(), 15));
+    } else if (fly && marker) {
       state.flying = true;
       cluster.zoomToShowLayer(marker, () => {
         map.once('moveend', () => (state.flying = false));
@@ -301,6 +400,8 @@ async function init() {
 
   $('#list').addEventListener('click', (e) => {
     if (e.target.closest('a')) return;
+    const star = e.target.closest('.fav-btn');
+    if (star) return onStar(star, star.closest('.card').dataset.id);
     const card = e.target.closest('.card');
     if (card) select(card.dataset.id, true);
   });
@@ -354,7 +455,7 @@ async function init() {
     clearTimeout(moveTimer);
     moveTimer = setTimeout(loadStations, MOVE_DEBOUNCE_MS);
   });
-  $('#refreshBtn').addEventListener('click', () => loadStations({ force: true }));
+  $('#refreshBtn').addEventListener('click', () => (state.showFavorites ? refreshFavorites() : loadStations({ force: true })));
 
   function setRef(lat, lon, label, kind) {
     state.ref = { lat, lon, label };

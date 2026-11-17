@@ -88,7 +88,10 @@
           <h1 id="countTitle">Bornes de recharge</h1>
           <p id="subtitle" class="muted" aria-live="polite">Déplacez la carte ou cherchez une adresse</p>
         </div>
-        <button id="refreshBtn" class="ghost-btn" type="button" title="Recharger la zone" aria-label="Recharger la zone">↻</button>
+        <div class="head-actions">
+          <button id="favBtn" class="ghost-btn fav-toggle" type="button" aria-pressed="false" title="Mes bornes favorites">★ <span id="favCount">0</span></button>
+          <button id="refreshBtn" class="ghost-btn" type="button" title="Recharger la zone" aria-label="Recharger la zone">↻</button>
+        </div>
       </div>
       <label class="sort muted" id="sortBox" hidden>Trier par <select id="sortSelect" aria-label="Trier la liste"></select></label>
       <div class="panel-scroll">

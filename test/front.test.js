@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { comparablePrice, FILTERS, passFilters, powerOf, SORTS, statusOf } from '../public/js/stations.js';
-import { cardHtml, navLinks, pinHtml, pinTitle } from '../public/js/templates.js';
+import { cardHtml, favButton, navLinks, pinHtml, pinTitle } from '../public/js/templates.js';
 import { detectPlatform } from '../public/js/dom.js';
 import { distanceKm, esc, fmtDist, fmtKwhPrice, formatViewHash, parseViewHash, safeUrl } from '../public/js/util.js';
 
@@ -116,4 +116,13 @@ test('Front : vue partagée dans l\'adresse', () => {
   assert.deepEqual(parseViewHash(hash), { view: { lat: 45.764, lon: 4.8357, zoom: 14 }, types: ['chademo', 'ccs'] });
   assert.deepEqual(parseViewHash('#6/47.2/-1.5'), { view: { lat: 47.2, lon: -1.5, zoom: 6 }, types: [] });
   for (const bad of ['', '#', '#abc', '#14/95/4', '#14/45/200', '#99/45/4', '#14/45', '#14/45/4/<script>']) assert.equal(parseViewHash(bad), null, bad);
+});
+
+test('Front : étoile des favoris sur les fiches', () => {
+  assert.match(favButton(true), /aria-pressed="true" aria-label="Retirer des favoris"/);
+  assert.match(favButton(false), /aria-pressed="false" aria-label="Ajouter aux favoris"/);
+  const s = station({});
+  const view = { types: ['chademo'], labels: { chademo: 'CHAdeMO' }, ref: { lat: 45.76, lon: 4.84 }, selectedId: null };
+  assert.match(cardHtml(s, { ...view, isFavorite: (id) => id === s.id }), /class="fav-btn" aria-pressed="true"/);
+  assert.match(cardHtml(s, view), /class="fav-btn" aria-pressed="false"/);
 });

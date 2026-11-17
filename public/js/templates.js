@@ -1,6 +1,6 @@
 /**
  * Gabarits HTML, en simples chaînes. Tout ce qui vient du serveur passe par esc().
- * view regroupe ce qui dépend de l'écran : { types, labels, ref, selectedId }.
+ * view regroupe ce qui dépend de l'écran : { types, labels, ref, selectedId, platform, isFavorite }.
  */
 import { powerOf, statusOf } from './stations.js';
 import { distanceKm, esc, fmtDist, fmtKwhPrice, safeUrl } from './util.js';
@@ -57,10 +57,17 @@ export function navLinks(station, platform) {
   return links;
 }
 
+/** Étoile des favoris ; son libellé dit ce que fera le clic. */
+export function favButton(fav) {
+  const label = fav ? 'Retirer des favoris' : 'Ajouter aux favoris';
+  return `<button type="button" class="fav-btn" aria-pressed="${fav}" aria-label="${label}" title="${label}">${fav ? '★' : '☆'}</button>`;
+}
+
 export function cardHtml(station, view) {
   const s = station;
   const { types, labels } = view;
   const selected = s.id === view.selectedId;
+  const fav = !!view.isFavorite?.(s.id);
   const st = statusOf(s);
   const p = powerOf(s, types);
   const plugTags = types
@@ -95,6 +102,7 @@ export function cardHtml(station, view) {
       <div class="card-top">
         <h2><button type="button" class="card-title" aria-expanded="${selected}">${esc(s.name)}</button></h2>
         <span class="dist">${fmtDist(distanceKm(view.ref, s))}</span>
+        ${favButton(fav)}
       </div>
       <div class="meta">${esc(s.address)}</div>
       <div class="tags">${tags}</div>
